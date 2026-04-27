@@ -12,13 +12,13 @@ body{font-family:Tahoma;background:#f1f5f9;margin:0}
 input,select,textarea{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #ccc}
 button{padding:10px 14px;border:none;border-radius:8px;cursor:pointer}
 .primary{background:#0ea5e9;color:white}
+.header{display:flex;justify-content:space-between;align-items:center}
 </style>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } 
-from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getFirestore, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCjJKdqU6IMzE4kFcxb-E5Z0mqxlncUVRQ",
@@ -33,6 +33,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+let currentUserData = null;
+
 // تسجيل دخول
 window.loginUser = async () => {
   const memberId = document.getElementById("memberId").value;
@@ -41,12 +43,14 @@ window.loginUser = async () => {
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
-    alert("تم تسجيل الدخول");
+    await loadUserData(memberId);
+
     document.getElementById("loginBox").style.display = "none";
     document.getElementById("app").style.display = "block";
+
     loadData();
   } catch (e) {
-    alert("خطأ: " + e.message);
+    alert(e.message);
   }
 };
 
@@ -60,9 +64,27 @@ window.registerUser = async () => {
     await createUserWithEmailAndPassword(auth, email, password);
     alert("تم إنشاء الحساب");
   } catch (e) {
-    alert("خطأ: " + e.message);
+    alert(e.message);
   }
 };
+
+// تحميل بيانات المستخدم
+async function loadUserData(memberId){
+  const q = query(collection(db, "users"), where("memberId", "==", memberId));
+  const snapshot = await getDocs(q);
+
+  if(snapshot.empty){
+    alert("⚠️ أضف بيانات المستخدم في Firestore (collection: users)");
+    return;
+  }
+
+  snapshot.forEach(doc=>{
+    currentUserData = doc.data();
+  });
+
+  document.getElementById("userName").innerText =
+    currentUserData.name + " - " + currentUserData.role;
+}
 
 // حفظ بلاغ
 window.addIncident = async () => {
@@ -72,6 +94,7 @@ window.addIncident = async () => {
   await addDoc(collection(db, "incidents"), {
     type,
     notes,
+    user: currentUserData?.name || "غير معروف",
     time: new Date().toLocaleString()
   });
 
@@ -79,18 +102,21 @@ window.addIncident = async () => {
   loadData();
 };
 
-// عرض البيانات
+// عرض البلاغات
 window.loadData = async () => {
   const querySnapshot = await getDocs(collection(db, "incidents"));
   let html = "";
+
   querySnapshot.forEach(doc => {
     const d = doc.data();
     html += `<div class="card">
       <b>${d.type}</b><br>
       ${d.notes}<br>
+      👤 ${d.user}<br>
       <small>${d.time}</small>
     </div>`;
   });
+
   document.getElementById("list").innerHTML = html;
 };
 </script>
@@ -106,7 +132,7 @@ window.loadData = async () => {
   <h3>تسجيل الدخول</h3>
 
   <label>رقم العضوية</label>
-  <input id="memberId" placeholder="مثال: 1001">
+  <input id="memberId">
 
   <label>كلمة المرور</label>
   <input id="password" type="password">
@@ -118,6 +144,10 @@ window.loadData = async () => {
 
 <!-- التطبيق -->
 <div id="app" style="display:none">
+
+<div class="header">
+  <h3 id="userName"></h3>
+</div>
 
 <h2>🚑 تسجيل حالة</h2>
 
